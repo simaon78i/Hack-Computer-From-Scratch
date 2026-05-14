@@ -3,3 +3,4 @@
 *.out linguist-documentation
 *.hdl linguist-language=VHDL
 *.asm linguist-language=Assembly
+*.hack linguist-generated
