@@ -2,3 +2,4 @@
 *.cmp linguist-documentation
 *.out linguist-documentation
 *.hdl linguist-language=VHDL
+*.asm linguist-language=Assembly
