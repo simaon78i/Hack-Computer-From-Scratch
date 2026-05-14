@@ -1,6 +1,11 @@
+#created automaticly
+*.hack linguist-generated
+*.out linguist-generated
+*.cmp linguist-generated
+
+#documentaion files
 *.tst linguist-documentation
-*.cmp linguist-documentation
-*.out linguist-documentation
+
+#my code files
 *.hdl linguist-language=VHDL
 *.asm linguist-language=Assembly
-*.hack linguist-generated
