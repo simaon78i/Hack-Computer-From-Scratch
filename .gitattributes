@@ -1,0 +1,4 @@
+*.tst linguist-documentation
+*.cmp linguist-documentation
+*.out linguist-documentation
+*.hdl linguist-language=Verilog
