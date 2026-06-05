@@ -1,0 +1,17 @@
+// File: Main.jack
+// Project 9 - Space Invaders
+// ---------------------------------------------------------------
+// Entry point of the application. Creates the game object,
+// runs it, and releases all allocated memory when the game ends.
+
+class Main {
+
+   /** Program entry point. */
+   function void main() {
+      var SpaceInvadersGame game;
+      let game = SpaceInvadersGame.new();
+      do game.run();
+      do game.dispose();
+      return;
+   }
+}

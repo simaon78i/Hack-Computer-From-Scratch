@@ -1,0 +1,109 @@
+// File: Bullet.jack
+// Project 9 - Space Invaders
+// ---------------------------------------------------------------
+// A generic bullet object, used both by the player (moving up,
+// negative dy) and by the aliens (moving down, positive dy).
+// Only one instance of each kind exists at a time; the 'active'
+// flag indicates whether the bullet is currently flying.
+//
+// The bullet automatically deactivates itself when it leaves the
+// playable area (below the HUD line, above the screen bottom).
+
+class Bullet {
+
+   field int x;          // left edge
+   field int y;          // top edge
+   field int width;      // bullet width  (pixels)
+   field int height;     // bullet height (pixels)
+   field int dy;         // vertical step per frame (negative = up)
+   field boolean active; // is the bullet currently on screen?
+
+   /** Constructs an inactive bullet with the given vertical speed.
+    *  direction < 0  : player bullet (moves up)
+    *  direction > 0  : alien bullet  (moves down)               */
+   constructor Bullet new(int direction) {
+      let width = 2;
+      let height = 6;
+      let dy = direction;
+      let active = false;
+      let x = 0;
+      let y = 0;
+      return this;
+   }
+
+   // ---------------- accessors ----------------
+
+   method boolean isActive() { return active; }
+   method int getX()         { return x; }
+   method int getY()         { return y; }
+   method int getWidth()     { return width; }
+   method int getHeight()    { return height; }
+
+   /** Returns the absolute speed of the bullet (pixels per frame).
+    *  Uses Math.abs since dy may be negative for upward bullets. */
+   method int getSpeed() {
+      return Math.abs(dy);
+   }
+
+   // ---------------- behavior ----------------
+
+   /** Activates the bullet at the given position (if not already active). */
+   method void fire(int startX, int startY) {
+      if (~active) {
+         let x = startX;
+         let y = startY;
+         let active = true;
+         do draw();
+      }
+      return;
+   }
+
+   /** Advances the bullet one step. Deactivates it when it leaves
+    *  the playable area (y < 14 is the HUD zone, y > 254 is off-screen). */
+   method void move() {
+      if (~active) {
+         return;
+      }
+      do erase();
+      let y = y + dy;
+      if ((y < 14) | ((y + height) > 254)) {
+         let active = false;
+         return;
+      }
+      do draw();
+      return;
+   }
+
+   /** Erases the bullet and marks it inactive (e.g. after a hit). */
+   method void deactivate() {
+      if (active) {
+         do erase();
+         let active = false;
+      }
+      return;
+   }
+
+   // ---------------- rendering ----------------
+
+   /** Draws the bullet rectangle. */
+   method void draw() {
+      do Screen.setColor(true);
+      do Screen.drawRectangle(x, y, x + width, y + height);
+      return;
+   }
+
+   /** Erases the bullet rectangle. */
+   method void erase() {
+      do Screen.setColor(false);
+      do Screen.drawRectangle(x, y, x + width, y + height);
+      return;
+   }
+
+   // ---------------- memory ----------------
+
+   /** Frees this object's memory. */
+   method void dispose() {
+      do Memory.deAlloc(this);
+      return;
+   }
+}

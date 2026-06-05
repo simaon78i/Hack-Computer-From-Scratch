@@ -1,0 +1,65 @@
+// File: Random.jack
+// Project 9 - Space Invaders
+// ---------------------------------------------------------------
+// A simple pseudo-random number generator based on a linear
+// congruential generator (LCG). The Hack platform has no source
+// of true randomness, so the generator is seeded with a constant
+// and continuously perturbed with user-dependent entropy (frame
+// counters, the player's position, pressed keys), which makes
+// every play-through different.
+//
+// 16-bit arithmetic on the Hack platform overflows silently,
+// which actually helps scramble the bits; Math.abs is used to
+// bring the result back to the non-negative range.
+
+class Random {
+
+   field int seed;   // current generator state (kept non-negative)
+
+   /** Constructs a generator with the given initial seed. */
+   constructor Random new(int initialSeed) {
+      let seed = Math.abs(initialSeed) + 1;
+      if (seed < 0) {           // guard: Math.abs(-32768) = -32768
+         let seed = 1;
+      }
+      return this;
+   }
+
+   /** Mixes external entropy (e.g. player position, key codes)
+    *  into the generator state. */
+   method void update(int entropy) {
+      let seed = seed + Math.abs(entropy);
+      if (seed < 0) {
+         let seed = Math.abs(seed + 1);
+      }
+      return;
+   }
+
+   /** Advances the generator and returns the next pseudo-random
+    *  non-negative number. */
+   method int next() {
+      // classic LCG step; overflow wraps around (mod 2^16)
+      let seed = (seed * 25173) + 13849;
+      let seed = Math.abs(seed);
+      if (seed < 0) {           // guard against the -32768 edge case
+         let seed = 7919;
+      }
+      return seed;
+   }
+
+   /** Returns a pseudo-random number in the range 0..range-1. */
+   method int randRange(int range) {
+      var int n;
+      if (range < 2) {
+         return 0;
+      }
+      let n = next();
+      return n - ((n / range) * range);   // n mod range
+   }
+
+   /** Frees this object's memory. */
+   method void dispose() {
+      do Memory.deAlloc(this);
+      return;
+   }
+}

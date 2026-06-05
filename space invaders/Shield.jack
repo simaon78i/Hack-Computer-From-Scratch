@@ -1,0 +1,164 @@
+// File: Shield.jack
+// Project 9 - Space Invaders
+// ---------------------------------------------------------------
+// A destructible defensive bunker, like in the original arcade
+// game. Each shield is a small grid of rows x cols blocks; every
+// bullet hit (from either side!) destroys exactly one block, so
+// the shield is gradually carved away.
+//
+// Just like the original game, the player's own bullets also
+// damage the shields - so the player must shoot through the gaps
+// they create, or from the sides.
+//
+// Block geometry:
+//   block (r, c) top-left pixel:
+//        bx = x + c * blockW
+//        by = y + r * blockH
+
+class Shield {
+
+   field int x;             // left edge of the shield
+   field int y;             // top edge of the shield
+   field int rows;          // block rows
+   field int cols;          // block columns
+   field int blockW;        // single block width  (pixels)
+   field int blockH;        // single block height (pixels)
+   field Array alive;       // alive[i] = true if block i is intact
+   field int aliveCount;    // number of intact blocks
+
+   /** Constructs a shield with its top-left corner at (leftX, topY),
+    *  shaped like the classic arcade bunker (an arch). */
+   constructor Shield new(int leftX, int topY) {
+      var int i, total;
+      let x = leftX;
+      let y = topY;
+      let rows = 3;
+      let cols = 7;
+      let blockW = 6;
+      let blockH = 5;
+      let total = rows * cols;
+      let alive = Array.new(total);
+      let i = 0;
+      while (i < total) {
+         let alive[i] = true;
+         let i = i + 1;
+      }
+      let aliveCount = total;
+      // carve the classic bunker shape:
+      // rounded top corners
+      do removeBlock(0, 0);
+      do removeBlock(0, cols - 1);
+      // arch notch at the bottom-center
+      do removeBlock(rows - 1, 2);
+      do removeBlock(rows - 1, 3);
+      do removeBlock(rows - 1, 4);
+      do draw();
+      return this;
+   }
+
+   // ---------------- accessors ----------------
+
+   method int getAliveCount() { return aliveCount; }
+
+   // ---------------- shape helpers ----------------
+
+   /** Marks block (r, c) as destroyed without drawing anything.
+    *  Used only while building the initial bunker shape. */
+   method void removeBlock(int r, int c) {
+      var int idx;
+      let idx = (r * cols) + c;
+      if (alive[idx]) {
+         let alive[idx] = false;
+         let aliveCount = aliveCount - 1;
+      }
+      return;
+   }
+
+   // ---------------- rendering ----------------
+
+   /** Draws all intact blocks. */
+   method void draw() {
+      var int i, total;
+      let total = rows * cols;
+      let i = 0;
+      while (i < total) {
+         if (alive[i]) {
+            do drawBlock(i / cols, i - ((i / cols) * cols));
+         }
+         let i = i + 1;
+      }
+      return;
+   }
+
+   /** Erases all intact blocks (used when rebuilding for a new level). */
+   method void eraseAll() {
+      var int i, total;
+      let total = rows * cols;
+      let i = 0;
+      while (i < total) {
+         if (alive[i]) {
+            do eraseBlock(i / cols, i - ((i / cols) * cols));
+         }
+         let i = i + 1;
+      }
+      return;
+   }
+
+   /** Draws a single block at grid position (r, c). */
+   method void drawBlock(int r, int c) {
+      var int bx, by;
+      let bx = x + (c * blockW);
+      let by = y + (r * blockH);
+      do Screen.setColor(true);
+      do Screen.drawRectangle(bx, by, bx + (blockW - 1), by + (blockH - 1));
+      return;
+   }
+
+   /** Erases a single block at grid position (r, c). */
+   method void eraseBlock(int r, int c) {
+      var int bx, by;
+      let bx = x + (c * blockW);
+      let by = y + (r * blockH);
+      do Screen.setColor(false);
+      do Screen.drawRectangle(bx, by, bx + (blockW - 1), by + (blockH - 1));
+      return;
+   }
+
+   // ---------------- combat ----------------
+
+   /** Checks whether the rectangle (rx, ry, rw, rh) - a bullet -
+    *  overlaps any intact block. If so, destroys that block,
+    *  erases it, and returns true. Otherwise returns false. */
+   method boolean checkHit(int rx, int ry, int rw, int rh) {
+      var int i, total, r, c, bx, by;
+      let total = rows * cols;
+      let i = 0;
+      while (i < total) {
+         if (alive[i]) {
+            let r = i / cols;
+            let c = i - (r * cols);
+            let bx = x + (c * blockW);
+            let by = y + (r * blockH);
+            // axis-aligned rectangle overlap test
+            if ((rx < (bx + blockW)) & ((rx + rw) > bx) &
+                (ry < (by + blockH)) & ((ry + rh) > by)) {
+               let alive[i] = false;
+               do eraseBlock(r, c);
+               let aliveCount = aliveCount - 1;
+               return true;
+            }
+         }
+         let i = i + 1;
+      }
+      return false;
+   }
+
+   // ---------------- memory ----------------
+
+   /** Frees the block array and this object. */
+   method void dispose() {
+      do alive.dispose();
+      do Memory.deAlloc(this);
+      return;
+   }
+}

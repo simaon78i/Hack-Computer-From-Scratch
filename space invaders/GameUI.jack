@@ -1,0 +1,162 @@
+// File: GameUI.jack
+// Project 9 - Space Invaders
+// ---------------------------------------------------------------
+// All user-interface drawing that is not a game object: the title
+// screen, the heads-up display (HUD), level banners, and the
+// win / lose end screens.
+//
+// The class contains only functions (no state), since the UI is
+// stateless - everything it needs is passed as arguments.
+//
+// Text layout reminder (Output class):
+//   23 rows (0..22), 64 columns (0..63)
+//   each character cell is 8 pixels wide and 11 pixels high.
+
+class GameUI {
+
+   /** Draws a decorative rectangular frame used by the full-screen
+    *  UI screens (title / end screens). */
+   function void drawFrame() {
+      do Screen.setColor(true);
+      do Screen.drawLine(40, 35, 471, 35);
+      do Screen.drawLine(40, 220, 471, 220);
+      do Screen.drawLine(40, 35, 40, 220);
+      do Screen.drawLine(471, 35, 471, 220);
+      return;
+   }
+
+   /** Draws a single decorative alien sprite at (ax, ay).
+    *  Same look as the in-game aliens, used on the title screen. */
+   function void drawDecorAlien(int ax, int ay) {
+      do Screen.setColor(true);
+      do Screen.drawRectangle(ax, ay + 3, ax + 18, ay + 13);
+      do Screen.drawRectangle(ax + 3, ay, ax + 5, ay + 3);
+      do Screen.drawRectangle(ax + 13, ay, ax + 15, ay + 3);
+      return;
+   }
+
+   /** Shows the title screen with the game name, decorations and
+    *  the control scheme, then waits for the player to press SPACE. */
+   function void showTitle() {
+      do Screen.clearScreen();
+      do GameUI.drawFrame();
+      // decorative aliens in the four corners of the frame
+      do GameUI.drawDecorAlien(70, 55);
+      do GameUI.drawDecorAlien(424, 55);
+      do GameUI.drawDecorAlien(70, 185);
+      do GameUI.drawDecorAlien(424, 185);
+      // title
+      do Output.moveCursor(5, 19);
+      do Output.printString("S P A C E   I N V A D E R S");
+      // controls
+      do Output.moveCursor(8, 21);
+      do Output.printString("Arrows : move the ship");
+      do Output.moveCursor(9, 21);
+      do Output.printString("Space  : fire");
+      do Output.moveCursor(10, 21);
+      do Output.printString("P      : pause / resume");
+      do Output.moveCursor(11, 21);
+      do Output.printString("Q      : quit");
+      // hint
+      do Output.moveCursor(14, 20);
+      do Output.printString("Press SPACE to start...");
+      do GameUI.waitForSpace();
+      do Screen.clearScreen();
+      return;
+   }
+
+   /** Draws the heads-up display on text row 0:
+    *  score, remaining lives, current level, and key hints. */
+   function void drawHUD(int score, int lives, int level) {
+      do Output.moveCursor(0, 0);
+      do Output.printString("Score: ");
+      do Output.printInt(score);
+      do Output.printString("   ");
+      do Output.moveCursor(0, 16);
+      do Output.printString("Lives: ");
+      do Output.printInt(lives);
+      do Output.moveCursor(0, 28);
+      do Output.printString("Level: ");
+      do Output.printInt(level);
+      do Output.moveCursor(0, 40);
+      do Output.printString("P=Pause Q=Quit");
+      return;
+   }
+
+   /** Shows a centered "LEVEL n" banner for a moment,
+    *  then erases it. */
+   function void showLevelBanner(int level) {
+      do Output.moveCursor(11, 27);
+      do Output.printString("LEVEL ");
+      do Output.printInt(level);
+      do Sys.wait(1200);
+      do Screen.setColor(false);
+      do Screen.drawRectangle(200, 118, 310, 135);
+      return;
+   }
+
+   /** Shows the pause indicator in the HUD area. */
+   function void showPaused() {
+      do Output.moveCursor(0, 56);
+      do Output.printString("PAUSED");
+      return;
+   }
+
+   /** Clears the pause indicator from the HUD area. */
+   function void clearPaused() {
+      do Output.moveCursor(0, 56);
+      do Output.printString("      ");
+      return;
+   }
+
+   /** Shows the final screen: win or lose message, the final
+    *  score and the level reached. */
+   function void showEndScreen(boolean won, int score, int level) {
+      do Screen.clearScreen();
+      do GameUI.drawFrame();
+      do Output.moveCursor(7, 27);
+      if (won) {
+         do Output.printString("YOU WIN!");
+      }
+      else {
+         do Output.printString("GAME OVER");
+      }
+      do Output.moveCursor(10, 24);
+      do Output.printString("Final score: ");
+      do Output.printInt(score);
+      do Output.moveCursor(11, 24);
+      do Output.printString("Level reached: ");
+      do Output.printInt(level);
+      do Output.moveCursor(14, 22);
+      do Output.printString("Thanks for playing!");
+      return;
+   }
+
+   // ---------------- keyboard helpers ----------------
+
+   /** Busy-waits until the SPACE key is pressed and released. */
+   function void waitForSpace() {
+      var char key;
+      let key = 0;
+      while (~(key = 32)) {
+         let key = Keyboard.keyPressed();
+      }
+      do GameUI.waitForKeyRelease();
+      return;
+   }
+
+   /** Busy-waits until any currently pressed key is released. */
+   function void waitForKeyRelease() {
+      while (~(Keyboard.keyPressed() = 0)) {
+      }
+      return;
+   }
+
+   /** Busy-waits until any key is pressed (without consuming
+    *  the release). */
+   function void waitForAnyKey() {
+      while (Keyboard.keyPressed() = 0) {
+      }
+      return;
+   }
+}

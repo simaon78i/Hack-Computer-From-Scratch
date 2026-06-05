@@ -1,0 +1,344 @@
+// File: SpaceInvadersGame.jack
+// Project 9 - Space Invaders
+// ---------------------------------------------------------------
+// The game engine: owns all game objects, runs the main loop,
+// handles keyboard input, collision resolution, scoring, lives,
+// levels, difficulty pacing, pause, and the win / lose flow.
+//
+// Controls:
+//   Left / Right arrows : move the ship
+//   Space               : fire (one bullet on screen at a time)
+//   P                   : pause / resume
+//   Q                   : quit
+//
+// Game structure:
+//   * The game has 3 levels. Each level restores the full alien
+//     formation and fresh shields, with faster aliens and a
+//     higher shooting rate. Each alien is worth (level * 10)
+//     points.
+//   * Three destructible shields protect the player; bullets
+//     from BOTH sides carve blocks out of them.
+//   * Win  : clear all 3 levels.
+//   * Lose : lives reach 0, or the alien formation descends to
+//     the shield line.
+//
+// Pacing:
+//   * The formation speeds up as aliens are destroyed (movement
+//     delay is proportional to the number of alive aliens) and
+//     as the level rises - clamped with Math.max so it never
+//     drops below one frame.
+
+class SpaceInvadersGame {
+
+   field Player player;        // the player's ship
+   field Bullet playerBullet;  // single player bullet (moves up)
+   field Bullet alienBullet;   // single alien bullet (moves down)
+   field AlienGrid aliens;     // the alien formation
+   field Array shields;        // 3 destructible Shield objects
+   field Random rng;           // pseudo-random number generator
+   field int score;            // accumulated score
+   field int lives;            // remaining lives (start: 3)
+   field int level;            // current level (1..maxLevel)
+   field int maxLevel;         // number of levels in the game
+   field boolean exit;         // main-loop termination flag
+   field int moveTimer;        // frames since last alien step
+   field int shootTimer;       // frames since last alien shot
+   field int frame;            // global frame counter
+
+   /** Constructs the game shell. The actual game objects are
+    *  created in initObjects(), after the title screen. */
+   constructor SpaceInvadersGame new() {
+      let player = null;
+      let playerBullet = null;
+      let alienBullet = null;
+      let aliens = null;
+      let shields = null;
+      let rng = null;
+      let score = 0;
+      let lives = 3;
+      let level = 1;
+      let maxLevel = 3;
+      let exit = false;
+      let moveTimer = 0;
+      let shootTimer = 0;
+      let frame = 0;
+      return this;
+   }
+
+   /** Creates all game objects and draws the initial play field. */
+   method void initObjects() {
+      let player = Player.new();
+      let playerBullet = Bullet.new(-6);   // moves up, 6 px per frame
+      let alienBullet = Bullet.new(4);     // moves down, 4 px per frame
+      let aliens = AlienGrid.new();
+      let rng = Random.new(7919);
+      let shields = Array.new(3);
+      let shields[0] = null;
+      let shields[1] = null;
+      let shields[2] = null;
+      do buildShields();
+      // HUD separator line under the text row
+      do Screen.setColor(true);
+      do Screen.drawLine(0, 12, 511, 12);
+      do GameUI.drawHUD(score, lives, level);
+      return;
+   }
+
+   /** Creates three fresh shields, evenly spaced above the player.
+    *  Any previous shields are erased and disposed first. */
+   method void buildShields() {
+      var Shield s;
+      var int i;
+      let i = 0;
+      while (i < 3) {
+         let s = shields[i];
+         if (~(s = null)) {
+            do s.eraseAll();
+            do s.dispose();
+         }
+         let i = i + 1;
+      }
+      let shields[0] = Shield.new(90, 200);
+      let shields[1] = Shield.new(235, 200);
+      let shields[2] = Shield.new(380, 200);
+      return;
+   }
+
+   /** Prepares the play field for the current level: recenters
+    *  the player, clears bullets, resets aliens and shields. */
+   method void startLevel() {
+      do playerBullet.deactivate();
+      do alienBullet.deactivate();
+      do player.reset();
+      do aliens.reset(level);
+      do buildShields();
+      let moveTimer = 0;
+      let shootTimer = 0;
+      do GameUI.drawHUD(score, lives, level);
+      return;
+   }
+
+   /** The main game flow: title screen, then the frame loop.
+    *  Each frame (~8 ms):
+    *  1. read keyboard and apply player actions
+    *  2. advance bullets and resolve collisions (shields first)
+    *  3. advance the alien formation on its timer
+    *  4. let the aliens shoot on their timer
+    *  5. evaluate level-complete / win / lose conditions       */
+   method void run() {
+      var char key;
+      do GameUI.showTitle();
+      do initObjects();
+      do GameUI.showLevelBanner(level);
+
+      while (~exit) {
+
+         // ---- 1. input ----
+         let key = Keyboard.keyPressed();
+         if (key = 130) {                  // left arrow
+            do player.moveLeft();
+         }
+         if (key = 132) {                  // right arrow
+            do player.moveRight();
+         }
+         if (key = 32) {                   // space - fire
+            if (~(playerBullet.isActive())) {
+               do playerBullet.fire(player.getMuzzleX(), player.getMuzzleY());
+               do rng.update(player.getX());
+            }
+         }
+         if ((key = 80) | (key = 112)) {   // 'P' or 'p' - pause
+            do pauseGame();
+         }
+         if ((key = 81) | (key = 113)) {   // 'Q' or 'q' - quit
+            let exit = true;
+         }
+
+         // ---- 2. bullets & collisions ----
+         do playerBullet.move();
+         do checkShieldHits(playerBullet);
+         do checkPlayerBulletHit();
+         do alienBullet.move();
+         do checkShieldHits(alienBullet);
+         do checkPlayerHit();
+
+         // ---- 3. alien marching (speeds up as aliens die
+         //         and as the level rises) ----
+         let moveTimer = moveTimer + 1;
+         if (moveTimer > Math.max(1, (2 + aliens.getAliveCount()) - (level * 2))) {
+            let moveTimer = 0;
+            do aliens.step();
+         }
+
+         // ---- 4. alien shooting (faster on higher levels) ----
+         let shootTimer = shootTimer + 1;
+         if (shootTimer > Math.max(12, 40 - (level * 6))) {
+            let shootTimer = 0;
+            do aliens.shoot(rng.next(), alienBullet);
+         }
+
+         // ---- 5. end-of-game / end-of-level conditions ----
+         if (~exit) {
+            if (lives = 0) {
+               do GameUI.showEndScreen(false, score, level);
+               let exit = true;
+            }
+         }
+         if (~exit) {
+            if (aliens.getAliveCount() = 0) {
+               if (level = maxLevel) {
+                  do GameUI.showEndScreen(true, score, level);
+                  let exit = true;
+               }
+               else {
+                  let level = level + 1;
+                  do GameUI.showLevelBanner(level);
+                  do startLevel();
+               }
+            }
+         }
+         if (~exit) {
+            if (aliens.getBottom() > 195) {   // formation reached the shields
+               do GameUI.showEndScreen(false, score, level);
+               let exit = true;
+            }
+         }
+
+         // frame counter (kept small to avoid 16-bit overflow)
+         let frame = frame + 1;
+         if (frame > 30000) {
+            let frame = 0;
+         }
+         do Sys.wait(8);
+      }
+      return;
+   }
+
+   // ---------------- pause ----------------
+
+   /** Pauses the game until P is pressed again.
+    *  Sequence: release P -> wait for next press -> release. */
+   method void pauseGame() {
+      do GameUI.showPaused();
+      do GameUI.waitForKeyRelease();
+      do GameUI.waitForAnyKey();
+      do GameUI.waitForKeyRelease();
+      do GameUI.clearPaused();
+      return;
+   }
+
+   // ---------------- collision handling ----------------
+
+   /** If the given bullet currently overlaps a shield block,
+    *  destroys that block and removes the bullet.
+    *  Called for BOTH the player's and the aliens' bullets. */
+   method void checkShieldHits(Bullet b) {
+      var Shield s;
+      var int i;
+      if (~(b.isActive())) {
+         return;
+      }
+      let i = 0;
+      while (i < 3) {
+         let s = shields[i];
+         if (s.checkHit(b.getX(), b.getY(), b.getWidth(), b.getHeight())) {
+            do b.deactivate();
+            return;
+         }
+         let i = i + 1;
+      }
+      return;
+   }
+
+   /** If the player's bullet currently overlaps an alien,
+    *  kills the alien, removes the bullet and updates the score
+    *  (each alien is worth level * 10 points). */
+   method void checkPlayerBulletHit() {
+      if (playerBullet.isActive()) {
+         if (aliens.checkHit(playerBullet.getX(), playerBullet.getY(),
+                             playerBullet.getWidth(), playerBullet.getHeight())) {
+            do playerBullet.deactivate();
+            let score = score + (level * 10);
+            do GameUI.drawHUD(score, lives, level);
+         }
+      }
+      return;
+   }
+
+   /** If the alien bullet currently overlaps the player's ship,
+    *  removes the bullet, decrements a life, and flashes the ship. */
+   method void checkPlayerHit() {
+      var int bx, by, bw, bh, px, py, pw, ph;
+      if (~(alienBullet.isActive())) {
+         return;
+      }
+      let bx = alienBullet.getX();
+      let by = alienBullet.getY();
+      let bw = alienBullet.getWidth();
+      let bh = alienBullet.getHeight();
+      let px = player.getX();
+      let py = player.getY();
+      let pw = player.getWidth();
+      let ph = player.getHeight();
+      // axis-aligned rectangle overlap test
+      if ((bx < (px + pw)) & ((bx + bw) > px) &
+          (by < (py + ph)) & ((by + bh) > py)) {
+         do alienBullet.deactivate();
+         let lives = lives - 1;
+         do GameUI.drawHUD(score, lives, level);
+         do flashPlayer();
+      }
+      return;
+   }
+
+   /** Brief visual feedback when the player is hit:
+    *  the ship blinks twice. */
+   method void flashPlayer() {
+      var int i;
+      let i = 0;
+      while (i < 2) {
+         do player.erase();
+         do Sys.wait(120);
+         do player.draw();
+         do Sys.wait(120);
+         let i = i + 1;
+      }
+      return;
+   }
+
+   // ---------------- memory ----------------
+
+   /** Frees all game objects and this object. */
+   method void dispose() {
+      var Shield s;
+      var int i;
+      if (~(player = null)) {
+         do player.dispose();
+      }
+      if (~(playerBullet = null)) {
+         do playerBullet.dispose();
+      }
+      if (~(alienBullet = null)) {
+         do alienBullet.dispose();
+      }
+      if (~(aliens = null)) {
+         do aliens.dispose();
+      }
+      if (~(rng = null)) {
+         do rng.dispose();
+      }
+      if (~(shields = null)) {
+         let i = 0;
+         while (i < 3) {
+            let s = shields[i];
+            if (~(s = null)) {
+               do s.dispose();
+            }
+            let i = i + 1;
+         }
+         do shields.dispose();
+      }
+      do Memory.deAlloc(this);
+      return;
+   }
+}

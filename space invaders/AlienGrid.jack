@@ -1,0 +1,291 @@
+// File: AlienGrid.jack
+// Project 9 - Space Invaders
+// ---------------------------------------------------------------
+// Manages the formation of aliens as a single logical grid of
+// rows x cols cells. Each alien occupies one cell; a boolean
+// array ('alive') tracks which aliens are still alive.
+//
+// Responsibilities:
+//   * Drawing / erasing the alien sprites.
+//   * Horizontal marching; reversing direction and descending
+//     one step whenever the grid reaches a screen edge.
+//   * Collision detection against the player's bullet, with a
+//     small explosion animation when an alien is destroyed.
+//   * Choosing an alien to fire the alien bullet (the lowest
+//     alive alien in a pseudo-randomly chosen column, so shots
+//     always have a clear path).
+//   * Resetting itself for a new level, with speed that scales
+//     with the level (clamped using Math.min).
+//
+// Grid geometry:
+//   alien index i  <->  row = i / cols , col = i mod cols
+//   alien (r, c) top-left pixel:
+//        ax = gridX + c * cellW
+//        ay = gridY + r * cellH
+
+class AlienGrid {
+
+   field Array alive;       // alive[i] = true if alien i is alive
+   field int rows;          // number of rows in the formation
+   field int cols;          // number of columns in the formation
+   field int gridX;         // left edge of the grid (pixels)
+   field int gridY;         // top edge of the grid (pixels)
+   field int cellW;         // cell width  (sprite + spacing)
+   field int cellH;         // cell height (sprite + spacing)
+   field int alienW;        // alien sprite width
+   field int alienH;        // alien sprite height
+   field int dx;            // current horizontal step per move
+   field int aliveCount;    // number of aliens still alive
+
+   /** Constructs a full 3x6 formation set up for level 1. */
+   constructor AlienGrid new() {
+      var int i, total;
+      let rows = 3;
+      let cols = 6;
+      let cellW = 34;
+      let cellH = 22;
+      let alienW = 18;
+      let alienH = 10;
+      let total = rows * cols;
+      let alive = Array.new(total);
+      // initialize all cells to 'dead' so reset() can safely erase
+      let i = 0;
+      while (i < total) {
+         let alive[i] = false;
+         let i = i + 1;
+      }
+      let aliveCount = 0;
+      do reset(1);
+      return this;
+   }
+
+   /** Resets the formation for the given level: all aliens come
+    *  back to life at the starting position, and the marching
+    *  speed grows with the level (clamped to 8 px per step). */
+   method void reset(int level) {
+      var int i, total;
+      do erase();                          // clear any leftovers
+      let gridX = 60;
+      let gridY = 30;
+      let dx = Math.min(8, 2 + (level * 2));
+      let total = rows * cols;
+      let i = 0;
+      while (i < total) {
+         let alive[i] = true;
+         let i = i + 1;
+      }
+      let aliveCount = total;
+      do draw();
+      return;
+   }
+
+   // ---------------- accessors ----------------
+
+   method int getAliveCount() { return aliveCount; }
+
+   /** Returns the current absolute marching speed. */
+   method int getSpeed() {
+      return Math.abs(dx);
+   }
+
+   /** Returns the bottom y coordinate of the lowest alive alien,
+    *  or 0 if no aliens are alive. Used for the "invasion" check. */
+   method int getBottom() {
+      var int i, row;
+      let i = (rows * cols) - 1;
+      while (i > (-1)) {
+         if (alive[i]) {
+            let row = i / cols;
+            return gridY + (row * cellH) + alienH;
+         }
+         let i = i - 1;
+      }
+      return 0;
+   }
+
+   // ---------------- helpers ----------------
+
+   /** Returns a mod b (both assumed non-negative).
+    *  Jack has no modulo operator, so we derive it from division. */
+   function int mod(int a, int b) {
+      return a - ((a / b) * b);
+   }
+
+   // ---------------- rendering ----------------
+
+   /** Draws all alive aliens. */
+   method void draw() {
+      var int i, total;
+      let total = rows * cols;
+      let i = 0;
+      while (i < total) {
+         if (alive[i]) {
+            do drawAlien(i / cols, AlienGrid.mod(i, cols));
+         }
+         let i = i + 1;
+      }
+      return;
+   }
+
+   /** Erases all alive aliens. */
+   method void erase() {
+      var int i, total;
+      let total = rows * cols;
+      let i = 0;
+      while (i < total) {
+         if (alive[i]) {
+            do eraseAlien(i / cols, AlienGrid.mod(i, cols));
+         }
+         let i = i + 1;
+      }
+      return;
+   }
+
+   /** Draws a single alien at grid position (r, c):
+    *  a body rectangle with two short antennae on top. */
+   method void drawAlien(int r, int c) {
+      var int ax, ay;
+      let ax = gridX + (c * cellW);
+      let ay = gridY + (r * cellH);
+      do Screen.setColor(true);
+      // body
+      do Screen.drawRectangle(ax, ay + 3, ax + alienW, ay + alienH);
+      // antennae
+      do Screen.drawRectangle(ax + 3, ay, ax + 5, ay + 3);
+      do Screen.drawRectangle(ax + 13, ay, ax + 15, ay + 3);
+      return;
+   }
+
+   /** Erases the full sprite area of alien (r, c). */
+   method void eraseAlien(int r, int c) {
+      var int ax, ay;
+      let ax = gridX + (c * cellW);
+      let ay = gridY + (r * cellH);
+      do Screen.setColor(false);
+      do Screen.drawRectangle(ax, ay, ax + alienW, ay + alienH);
+      return;
+   }
+
+   /** Draws a brief X-shaped explosion at alien cell (r, c),
+    *  then clears the cell. */
+   method void drawExplosion(int r, int c) {
+      var int ax, ay;
+      let ax = gridX + (c * cellW);
+      let ay = gridY + (r * cellH);
+      do Screen.setColor(true);
+      do Screen.drawLine(ax + 2, ay + 2, (ax + alienW) - 2, (ay + alienH) - 2);
+      do Screen.drawLine(ax + 2, (ay + alienH) - 2, (ax + alienW) - 2, ay + 2);
+      do Sys.wait(25);
+      do Screen.setColor(false);
+      do Screen.drawRectangle(ax, ay, ax + alienW, ay + alienH);
+      return;
+   }
+
+   // ---------------- movement ----------------
+
+   /** Advances the formation one step.
+    *  Marches horizontally; when the grid bounding box reaches a
+    *  screen edge, reverses direction and descends 8 pixels. */
+   method void step() {
+      var int rightEdge;
+      do erase();
+      let rightEdge = gridX + (cols * cellW);
+      if (dx > 0) {
+         if ((rightEdge + dx) > 505) {
+            let dx = -dx;
+            let gridY = gridY + 8;
+         }
+         else {
+            let gridX = gridX + dx;
+         }
+      }
+      else {
+         if ((gridX + dx) < 5) {
+            let dx = -dx;
+            let gridY = gridY + 8;
+         }
+         else {
+            let gridX = gridX + dx;
+         }
+      }
+      do draw();
+      return;
+   }
+
+   // ---------------- combat ----------------
+
+   /** Checks whether the rectangle (bx, by, bw, bh) - typically the
+    *  player's bullet - overlaps any alive alien. If so, kills that
+    *  alien with a small explosion and returns true.
+    *  Otherwise returns false. */
+   method boolean checkHit(int bx, int by, int bw, int bh) {
+      var int i, total, r, c, ax, ay;
+      let total = rows * cols;
+      let i = 0;
+      while (i < total) {
+         if (alive[i]) {
+            let r = i / cols;
+            let c = AlienGrid.mod(i, cols);
+            let ax = gridX + (c * cellW);
+            let ay = gridY + (r * cellH);
+            // axis-aligned rectangle overlap test
+            if ((bx < (ax + alienW)) & ((bx + bw) > ax) &
+                (by < (ay + alienH)) & ((by + bh) > ay)) {
+               let alive[i] = false;
+               let aliveCount = aliveCount - 1;
+               do drawExplosion(r, c);
+               return true;
+            }
+         }
+         let i = i + 1;
+      }
+      return false;
+   }
+
+   /** Fires the given (inactive) bullet from one of the aliens.
+    *  'seed' provides pseudo-randomness: it selects a starting
+    *  column, and we fire from the lowest alive alien in the first
+    *  non-empty column found (so shots always have a clear path). */
+   method void shoot(int seed, Bullet b) {
+      var int c, r, tries, idx, mx, my;
+      if (b.isActive()) {
+         return;
+      }
+      if (aliveCount = 0) {
+         return;
+      }
+      let c = AlienGrid.mod(Math.abs(seed), cols);
+      let tries = 0;
+      while (tries < cols) {
+         // search for the lowest alive alien in column c
+         let r = rows - 1;
+         while (r > (-1)) {
+            let idx = (r * cols) + c;
+            if (alive[idx]) {
+               // muzzle = bottom-center of that alien
+               let mx = gridX + (c * cellW) + (alienW / 2);
+               let my = gridY + (r * cellH) + alienH + 2;
+               do b.fire(mx, my);
+               return;
+            }
+            let r = r - 1;
+         }
+         // column empty - try the next one (wrap around)
+         let c = c + 1;
+         if (c = cols) {
+            let c = 0;
+         }
+         let tries = tries + 1;
+      }
+      return;
+   }
+
+   // ---------------- memory ----------------
+
+   /** Frees the alive array and this object. */
+   method void dispose() {
+      do alive.dispose();
+      do Memory.deAlloc(this);
+      return;
+   }
+}

@@ -1,0 +1,117 @@
+// File: Player.jack
+// Project 9 - Space Invaders
+// ---------------------------------------------------------------
+// Represents the player's cannon (ship) at the bottom of the
+// screen. The ship moves left/right; its position is clamped to
+// the screen bounds using Math.min / Math.max.
+//
+// Screen coordinate system reminder:
+//   x: 0..511 (left to right), y: 0..255 (top to bottom)
+
+class Player {
+
+   field int x;        // left edge of the ship
+   field int y;        // top edge of the ship (constant)
+   field int width;    // total sprite width  (pixels)
+   field int height;   // total sprite height (pixels)
+   field int speed;    // pixels moved per key-press frame
+   field int minX;     // leftmost allowed x
+   field int maxX;     // rightmost allowed x (left edge)
+
+   /** Constructs the player ship, centered at the bottom of the screen. */
+   constructor Player new() {
+      let width = 24;
+      let height = 10;
+      let x = 244;                  // (512 - 24) / 2 -> centered
+      let y = 240;                  // near the bottom (240 + 10 = 250 < 255)
+      let speed = 4;
+      let minX = 2;
+      let maxX = 509 - width;
+      do draw();
+      return this;
+   }
+
+   // ---------------- accessors ----------------
+
+   method int getX()      { return x; }
+   method int getY()      { return y; }
+   method int getWidth()  { return width; }
+   method int getHeight() { return height; }
+
+   /** Returns the x coordinate from which the player's bullet
+    *  should be fired (the cannon barrel center). */
+   method int getMuzzleX() {
+      return x + ((width - 2) / 2);
+   }
+
+   /** Returns the y coordinate from which the player's bullet
+    *  should be fired (just above the cannon barrel). */
+   method int getMuzzleY() {
+      return y - 8;
+   }
+
+   // ---------------- rendering ----------------
+
+   /** Draws the ship: a body rectangle plus a small cannon barrel. */
+   method void draw() {
+      do Screen.setColor(true);
+      // body
+      do Screen.drawRectangle(x, y + 3, x + width, y + height);
+      // cannon barrel (centered on the body)
+      do Screen.drawRectangle(x + 9, y, x + 14, y + 3);
+      return;
+   }
+
+   /** Erases the whole ship bounding box. */
+   method void erase() {
+      do Screen.setColor(false);
+      do Screen.drawRectangle(x, y, x + width, y + height);
+      return;
+   }
+
+   // ---------------- movement ----------------
+
+   /** Moves the ship 'speed' pixels to the left.
+    *  The new position is clamped with Math.max so the ship can
+    *  never leave the screen. */
+   method void moveLeft() {
+      var int newX;
+      let newX = Math.max(minX, x - speed);
+      if (newX < x) {
+         do erase();
+         let x = newX;
+         do draw();
+      }
+      return;
+   }
+
+   /** Moves the ship 'speed' pixels to the right.
+    *  The new position is clamped with Math.min so the ship can
+    *  never leave the screen. */
+   method void moveRight() {
+      var int newX;
+      let newX = Math.min(maxX, x + speed);
+      if (newX > x) {
+         do erase();
+         let x = newX;
+         do draw();
+      }
+      return;
+   }
+
+   /** Re-centers the ship (used when a new level starts). */
+   method void reset() {
+      do erase();
+      let x = 244;
+      do draw();
+      return;
+   }
+
+   // ---------------- memory ----------------
+
+   /** Frees this object's memory. */
+   method void dispose() {
+      do Memory.deAlloc(this);
+      return;
+   }
+}
